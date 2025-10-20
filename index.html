@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="lt">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>EPT — Laikrodis</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      min-height:100vh;
+      margin:0;
+      background: linear-gradient(180deg,#f7f9fc,#e9eef6);
+      color:#102a43;
+    }
+    .card {
+      background: white;
+      border-radius:12px;
+      box-shadow: 0 10px 30px rgba(16,42,67,0.12);
+      padding:28px;
+      max-width:520px;
+      width:94%;
+      text-align:center;
+    }
+    h1 { margin:0 0 8px 0; font-size:20px; }
+    .meta { margin:8px 0 18px 0; color:#334e68; }
+    .meta b { display:inline-block; min-width:90px; text-align:right; margin-right:10px; }
+    canvas { display:block; margin: 18px auto 6px auto; width:280px; height:280px; }
+    .caption { font-size:13px; color:#627d98; }
+    .foot { margin-top:14px; font-size:12px; color:#98a7bb; }
+    /* Small responsive tweak */
+    @media (max-width:420px){
+      canvas { width:220px; height:220px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="card" role="main" aria-label="EPT puslapis su laikrodžiu">
+    <h1>EPT — demonstracinis puslapis</h1>
+
+    <div class="meta">
+      <div><b>Vardas:</b> Jurate </div>
+      <div><b>Pavardė:</b> Pasvenske </div>
+      <div><b>Dalykas:</b> EPT</div>
+      <div><b>Data:</b> <span id="current-date">2025-10-20</span></div>
+    </div>
+
+    <!-- Analoginis "paveiksliukas" -->
+    <canvas id="clock" width="560" height="560" aria-label="Analoginis laikrodis"></canvas>
+    <div class="caption">Mechaninis (analoginis) laikrodis — laikas pagal Europe/Vilnius</div>
+
+    <div class="foot">Laikrodis atnaujinamas kas sekundę.</div>
+  </div>
+
+  <script>
+    // Puslapio data (fiksuota pagal užduotį)
+    document.getElementById('current-date').textContent = '2025-10-20';
+
+    // Funkcija: gauna dabartinius val., min., sek. pagal Europe/Vilnius naudodama Intl API
+    function getVilniusTimeParts() {
+      const now = new Date();
+      // Naudojame formatToParts, kad gautume numerius laiko juostoje 'Europe/Vilnius'
+      const fmt = new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'Europe/Vilnius',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+      });
+      // formatToParts prieinama kai kuriuose naršyklėse; jeigu ne - naudosime toLocaleString veriją
+      if (fmt.formatToParts) {
+        const parts = fmt.formatToParts(now);
+        const p = {};
+        for (const part of parts) {
+          if (part.type === 'hour') p.hour = parseInt(part.value,10);
+          if (part.type === 'minute') p.minute = parseInt(part.value,10);
+          if (part.type === 'second') p.second = parseInt(part.value,10);
+        }
+        return { hour: p.hour, minute: p.minute, second: p.second };
+      } else {
+        // Fallback (retkarčiais gali būti viena valanda netikslumo jei naršyklė neveikia su timeZone)
+        const s = now.toLocaleString('en-GB', { timeZone: 'Europe/Vilnius' });
+        // s pavidalas: "DD/MM/YYYY, HH:MM:SS"
+        const m = s.match(/(\d{2}):(\d{2}):(\d{2})/);
+        if (m) return { hour: parseInt(m[1],10), minute: parseInt(m[2],10), second: parseInt(m[3],10) };
+        // Galutinis fallback - vietinis laikas
+        return { hour: now.getHours(), minute: now.getMinutes(), second: now.getSeconds() };
+      }
+    }
+
+    // Piešimas ant canvas analoginio laikrodžio
+    const canvas = document.getElementById('clock');
+    const ctx = canvas.getContext('2d');
+    const DPR = window.devicePixelRatio || 1;
+    // Masto keitimas, kad būtų aštrus ant HiDPI ekranų
+    function resizeCanvas(){
+      const w = canvas.clientWidth;
+      const h = canvas.clientHeight;
+      canvas.width = Math.round(w * DPR);
+      canvas.height = Math.round(h * DPR);
+      ctx.setTransform(DPR,0,0,DPR,0,0);
+    }
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+
+    function drawClock() {
+      resizeCanvas();
+      const width = canvas.clientWidth;
+      const height = canvas.clientHeight;
+      const cx = width/2;
+      const cy = height/2;
+      const radius = Math.min(width, height) * 0.45;
+
+      // background
+      ctx.clearRect(0,0,width,height);
+      // Outer casing (simulating mechaninis laikrodis)
+      const grad = ctx.createLinearGradient(cx - radius, cy - radius, cx + radius, cy + radius);
+      grad.addColorStop(0, '#f3f6fb');
+      grad.addColorStop(0.5, '#ffffff');
+      grad.addColorStop(1, '#eef3fb');
+
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius + 12, 0, Math.PI*2);
+      ctx.fillStyle = grad;
+      ctx.fill();
+      // rim
+      ctx.lineWidth = 6;
+      ctx.strokeStyle = '#bccbe0';
+      ctx.stroke();
+
+      // dial
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius, 0, Math.PI*2);
+      ctx.fillStyle = '#fff';
+      ctx.fill();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = '#d7e2f0';
+      ctx.stroke();
+
+      // hour marks and minute marks
+      ctx.save();
+      ctx.translate(cx, cy);
+      for (let i=0;i<60;i++){
+        const ang = (i/60) * Math.PI*2;
+        const outer = radius - 8;
+        const inner = (i%5===0) ? (radius - 22) : (radius - 14);
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(ang)*outer, Math.sin(ang)*outer);
+        ctx.lineTo(Math.cos(ang)*inner, Math.sin(ang)*inner);
+        ctx.lineWidth = (i%5===0) ? 3 : 1;
+        ctx.strokeStyle = (i%5===0) ? '#2b3e50' : '#97a6bd';
+        ctx.stroke();
+      }
+      ctx.restore();
+
+      // center pin
+      ctx.beginPath();
+      ctx.arc(cx, cy, 6, 0, Math.PI*2);
+      ctx.fillStyle = '#2b3e50';
+      ctx.fill();
+
+      // get Vilnius time
+      const t = getVilniusTimeParts();
+      let hr = t.hour % 12;
+      const min = t.minute;
+      const sec = t.second;
+
+      // calculate angles
+      const secAng = (sec/60) * Math.PI*2;
+      const minAng = ((min + sec/60)/60) * Math.PI*2;
+      const hrAng = ((hr + min/60 + sec/3600)/12) * Math.PI*2;
+
+      // draw hour hand
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(hrAng);
+      ctx.beginPath();
+      ctx.moveTo(-8, 10);
+      ctx.lineTo(0, -radius*0.45);
+      ctx.lineTo(8, 10);
+      ctx.closePath();
+      ctx.fillStyle = '#22303f';
+      ctx.fill();
+      ctx.restore();
+
+      // draw minute hand
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(minAng);
+      ctx.beginPath();
+      ctx.moveTo(-6, 12);
+      ctx.lineTo(0, -radius*0.65);
+      ctx.lineTo(6, 12);
+      ctx.closePath();
+      ctx.fillStyle = '#15303b';
+      ctx.fill();
+      ctx.restore();
+
+      // draw seconds hand (thin)
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(secAng);
+      ctx.beginPath();
+      ctx.moveTo(0, 18);
+      ctx.lineTo(0, -radius*0.78);
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = '#b33';
+      ctx.stroke();
+      // small counterweight
+      ctx.beginPath();
+      ctx.arc(0, 20, 4, 0, Math.PI*2);
+      ctx.fillStyle = '#b33';
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // initial draw + update every second
+    drawClock();
+    setInterval(drawClock, 1000);
+  </script>
+</body>
+</html>
